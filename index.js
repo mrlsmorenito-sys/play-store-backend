@@ -15,10 +15,11 @@ app.get('/api/apps', async (req, res) => {
     const results = await gplay.list({
       category: gplay.category.GAME,
       collection: gplay.collection.TOP_FREE,
-      num: 20
+      num: 20,
+      lang: 'es',
+      country: 'mx'
     });
 
-    // Formateamos la lista para Sketchware
     const formattedApps = results.map(app => ({
       title: app.title,
       developer: app.developer,
@@ -30,6 +31,35 @@ app.get('/api/apps', async (req, res) => {
     res.json(formattedApps);
   } catch (error) {
     res.status(500).json({ error: "Error al obtener datos de Google Play" });
+  }
+});
+
+// Endpoint de Búsqueda Real (¡Este era el que faltaba en tu index.js!)
+app.get('/api/search', async (req, res) => {
+  try {
+    const query = req.query.q;
+    if (!query) {
+      return res.json([]);
+    }
+
+    const results = await gplay.search({
+      term: query,
+      num: 15,
+      lang: 'es',
+      country: 'mx'
+    });
+
+    const formattedApps = results.map(app => ({
+      title: app.title,
+      developer: app.developer,
+      icon: app.icon,
+      appId: app.appId,
+      scoreText: app.scoreText || "4.5"
+    }));
+
+    res.json(formattedApps);
+  } catch (error) {
+    res.status(500).json({ error: "Error al buscar en Google Play" });
   }
 });
 
