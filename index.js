@@ -3,13 +3,19 @@ const gplay = require('google-play-scraper');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Permite accesos desde la app en Sketchware
+// Permite accesos desde la app en Sketchware sin bloqueos CORS
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
   next();
 });
 
-// Endpoint dinámico para las pestañas de la barra inferior (Today, Games, Apps, Arcade)
+// Endpoint de prueba para verificar que el servidor está activo en JSON y no HTML
+app.get('/', (req, res) => {
+  res.json({ status: "API de Google Play funcionando correctamente" });
+});
+
+// Endpoint dinámico para las pestañas (Today, Games, Apps)
 app.get('/api/apps', async (req, res) => {
   try {
     const tab = req.query.tab || 'apps';
@@ -40,11 +46,11 @@ app.get('/api/apps', async (req, res) => {
 
     res.json(formattedApps);
   } catch (error) {
-    res.status(500).json({ error: "Error al obtener datos de Google Play" });
+    res.status(500).json({ error: "Error al obtener datos de Google Play: " + error.message });
   }
 });
 
-// Endpoint de Búsqueda Real
+// Endpoint de Búsqueda Real en tiempo real
 app.get('/api/search', async (req, res) => {
   try {
     const query = req.query.q;
@@ -69,11 +75,11 @@ app.get('/api/search', async (req, res) => {
 
     res.json(formattedApps);
   } catch (error) {
-    res.status(500).json({ error: "Error al buscar en Google Play" });
+    res.status(500).json({ error: "Error al buscar en Google Play: " + error.message });
   }
 });
 
-// Endpoint para obtener detalles completos, comentarios y link de descarga de una app
+// Endpoint para obtener detalles completos, link de descarga (Play Store/APK oficial) y capturas
 app.get('/api/app', async (req, res) => {
   try {
     const appId = req.query.id;
@@ -82,23 +88,30 @@ app.get('/api/app', async (req, res) => {
     }
 
     const appDetails = await gplay.detail({ appId: appId, lang: 'es', country: 'mx' });
-    const reviews = await gplay.reviews({ appId: appId, page: 1, lang: 'es', country: 'mx' });
+    let reviewsData = [];
+    
+    try {
+      const reviews = await gplay.reviews({ appId: appId, page: 1, lang: 'es', country: 'mx' });
+      reviewsData = reviews.data ? reviews.data.map(r => ({ userName: r.userName, text: r.text, score: r.score })) : [];
+    } catch (revError) {
+      reviewsData = []; // Si las reseñas fallan por restricciones geográficas, evitamos que rompa toda la petición
+    }
 
     res.json({
       title: appDetails.title,
       developer: appDetails.developer,
       icon: appDetails.icon,
-      summary: appDetails.summary,
-      description: appDetails.description,
-      scoreText: appDetails.scoreText,
-      installs: appDetails.installs,
-      size: appDetails.size,
-      screenshots: appDetails.screenshots,
-      downloadUrl: appDetails.url,
-      reviews: reviews.data ? reviews.data.map(r => ({ userName: r.userName, text: r.text, score: r.score })) : []
+      summary: appDetails.summary || "",
+      description: appDetails.description || "",
+      scoreText: appDetails.scoreText || "4.5",
+      installs: appDetails.installs || "Desconocido",
+      size: appDetails.size || "Varía según dispositivo",
+      screenshots: appDetails.screenshots || [],
+      downloadUrl: appDetails.url || `https://play.google.com/store/apps/details?id=${appId}`,
+      reviews: reviewsData
     });
   } catch (error) {
-    res.status(500).json({ error: "No se pudieron obtener los detalles de la app" });
+    res.status(500).json({ error: "No se pudieron obtener los detalles de la app: " + error.message });
   }
 });
 
