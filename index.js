@@ -10,6 +10,12 @@ app.use((req, res, next) => {
   next();
 });
 
+// Función auxiliar para generar un enlace de descarga directa de APK basado en el appId
+function getDirectApkUrl(appId) {
+  // Usamos un servicio espejo público y estable basado en el paquete para descargas directas
+  return `https://d.apkpure.com/b/APK/${appId}?version=latest`;
+}
+
 // Endpoint principal / para que la pantalla de inicio no se quede en blanco
 app.get('/', async (req, res) => {
   try {
@@ -27,7 +33,7 @@ app.get('/', async (req, res) => {
       icon: app.icon || "",
       appId: app.appId || "",
       scoreText: app.scoreText || "4.5",
-      downloadUrl: app.url || `https://play.google.com/store/apps/details?id=${app.appId}`,
+      downloadUrl: getDirectApkUrl(app.appId),
       img1: (app.screenshots && app.screenshots.length > 0) ? app.screenshots[0] : "",
       img2: (app.screenshots && app.screenshots.length > 1) ? app.screenshots[1] : ""
     }));
@@ -65,7 +71,7 @@ app.get('/api/apps', async (req, res) => {
       icon: app.icon || "",
       appId: app.appId || "",
       scoreText: app.scoreText || "4.5",
-      downloadUrl: app.url || `https://play.google.com/store/apps/details?id=${app.appId}`,
+      downloadUrl: getDirectApkUrl(app.appId),
       img1: (app.screenshots && app.screenshots.length > 0) ? app.screenshots[0] : "",
       img2: (app.screenshots && app.screenshots.length > 1) ? app.screenshots[1] : ""
     }));
@@ -97,7 +103,7 @@ app.get('/api/search', async (req, res) => {
       icon: app.icon || "",
       appId: app.appId || "",
       scoreText: app.scoreText || "4.5",
-      downloadUrl: app.url || `https://play.google.com/store/apps/details?id=${app.appId}`,
+      downloadUrl: getDirectApkUrl(app.appId),
       img1: (app.screenshots && app.screenshots.length > 0) ? app.screenshots[0] : "",
       img2: (app.screenshots && app.screenshots.length > 1) ? app.screenshots[1] : ""
     }));
@@ -128,7 +134,7 @@ app.get('/api/app', async (req, res) => {
       installs: appDetails.installs || "Desconocido",
       size: appDetails.size || "Varía",
       screenshots: appDetails.screenshots || [],
-      downloadUrl: appDetails.url || `https://play.google.com/store/apps/details?id=${appId}`
+      downloadUrl: getDirectApkUrl(appId)
     });
   } catch (error) {
     res.status(500).json({ error: "Error al obtener detalles: " + error.message });
