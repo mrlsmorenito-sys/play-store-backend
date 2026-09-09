@@ -26,7 +26,10 @@ app.get('/', async (req, res) => {
       developer: app.developer || "Desconocido",
       icon: app.icon || "",
       appId: app.appId || "",
-      scoreText: app.scoreText || "4.5"
+      scoreText: app.scoreText || "4.5",
+      downloadUrl: app.url || `https://play.google.com/store/apps/details?id=${app.appId}`,
+      img1: (app.screenshots && app.screenshots.length > 0) ? app.screenshots[0] : "",
+      img2: (app.screenshots && app.screenshots.length > 1) ? app.screenshots[1] : ""
     }));
 
     res.json(formattedApps);
@@ -61,7 +64,10 @@ app.get('/api/apps', async (req, res) => {
       developer: app.developer || "Desconocido",
       icon: app.icon || "",
       appId: app.appId || "",
-      scoreText: app.scoreText || "4.5"
+      scoreText: app.scoreText || "4.5",
+      downloadUrl: app.url || `https://play.google.com/store/apps/details?id=${app.appId}`,
+      img1: (app.screenshots && app.screenshots.length > 0) ? app.screenshots[0] : "",
+      img2: (app.screenshots && app.screenshots.length > 1) ? app.screenshots[1] : ""
     }));
 
     res.json(formattedApps);
@@ -90,7 +96,10 @@ app.get('/api/search', async (req, res) => {
       developer: app.developer || "Desconocido",
       icon: app.icon || "",
       appId: app.appId || "",
-      scoreText: app.scoreText || "4.5"
+      scoreText: app.scoreText || "4.5",
+      downloadUrl: app.url || `https://play.google.com/store/apps/details?id=${app.appId}`,
+      img1: (app.screenshots && app.screenshots.length > 0) ? app.screenshots[0] : "",
+      img2: (app.screenshots && app.screenshots.length > 1) ? app.screenshots[1] : ""
     }));
 
     res.json(formattedApps);
