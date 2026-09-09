@@ -1,31 +1,35 @@
-// Endpoint para obtener los detalles completos de una app por su ID (ej. com.dts.freefireth)
-app.get('/api/app', async (req, res) => {
+// Endpoint dinámico para las pestañas de la barra inferior
+app.get('/api/apps', async (req, res) => {
   try {
-    const appId = req.query.id;
-    if (!appId) {
-      return res.status(400).json({ error: "Falta el ID de la aplicación" });
+    const tab = req.query.tab || 'apps';
+    let category = gplay.category.APPLICATION;
+    let collection = gplay.collection.TOP_FREE;
+
+    // Configuramos los filtros según la pestaña seleccionada
+    if (tab === 'games' || tab === 'arcade') {
+      category = gplay.category.GAME;
+    } else if (tab === 'today') {
+      collection = gplay.collection.NEW_FREE; // O editor choice simulado
     }
 
-    // Usamos gplay.detail para obtener descripción, capturas, comentarios, etc.
-    const appDetails = await gplay.detail({ appId: appId, lang: 'es', country: 'mx' });
-    
-    // Obtenemos reseñas/comentarios de la app
-    const reviews = await gplay.reviews({ appId: appId, page: 1, lang: 'es', country: 'mx' });
-
-    res.json({
-      title: appDetails.title,
-      developer: appDetails.developer,
-      icon: appDetails.icon,
-      summary: appDetails.summary,
-      description: appDetails.description,
-      scoreText: appDetails.scoreText,
-      installs: appDetails.installs,
-      size: appDetails.size,
-      screenshots: appDetails.screenshots,
-      downloadUrl: appDetails.url, // Enlace oficial o de descarga de la Play Store
-      reviews: reviews.data ? reviews.data.map(r => ({ userName: r.userName, text: r.text, score: r.score })) : []
+    const results = await gplay.list({
+      category: category,
+      collection: collection,
+      num: 20,
+      lang: 'es',
+      country: 'mx'
     });
+
+    const formattedApps = results.map(app => ({
+      title: app.title,
+      developer: app.developer,
+      icon: app.icon,
+      appId: app.appId,
+      scoreText: app.scoreText || "4.5"
+    }));
+
+    res.json(formattedApps);
   } catch (error) {
-    res.status(500).json({ error: "No se pudieron obtener los detalles de la app" });
+    res.status(500).json({ error: "Error al obtener datos de Google Play" });
   }
 });
