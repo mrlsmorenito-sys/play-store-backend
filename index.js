@@ -10,9 +10,9 @@ app.use((req, res, next) => {
   next();
 });
 
-// Función auxiliar para generar un enlace de descarga directa de APK basado en el appId
+// Función para generar un enlace de descarga directa del APK optimizado para el DownloadManager
 function getDirectApkUrl(appId) {
-  // Usamos un servicio espejo público y estable basado en el paquete para descargas directas
+  // Enlace directo estructurado para descarga de binarios en segundo plano
   return `https://d.apkpure.com/b/APK/${appId}?version=latest`;
 }
 
