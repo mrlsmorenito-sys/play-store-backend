@@ -1,6 +1,7 @@
 {
   "name": "play-store-backend",
   "version": "1.0.0",
+  "description": "Backend para tienda de aplicaciones estilo App Store",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
