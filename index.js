@@ -10,13 +10,19 @@ app.use((req, res, next) => {
   next();
 });
 
-// Función para generar un enlace de descarga directa del APK optimizado para el DownloadManager
+// Función para generar un enlace de descarga directa del APK
 function getDirectApkUrl(appId) {
-  // Enlace directo estructurado para descarga de binarios en segundo plano
   return `https://d.apkpure.com/b/APK/${appId}?version=latest`;
 }
 
-// Endpoint principal / para que la pantalla de inicio no se quede en blanco
+// Función auxiliar para asegurar que las URLs de imágenes sean válidas
+function cleanImageUrl(url) {
+  if (!url) return "";
+  if (url.startsWith("//")) return "https:" + url;
+  return url;
+}
+
+// Endpoint principal / 
 app.get('/', async (req, res) => {
   try {
     const results = await gplay.list({
@@ -30,12 +36,12 @@ app.get('/', async (req, res) => {
     const formattedApps = results.map(app => ({
       title: app.title || "Sin título",
       developer: app.developer || "Desconocido",
-      icon: app.icon || "",
+      icon: cleanImageUrl(app.icon || ""),
       appId: app.appId || "",
       scoreText: app.scoreText || "4.5",
+      score: app.score || 4.5,
       downloadUrl: getDirectApkUrl(app.appId),
-      img1: (app.screenshots && app.screenshots.length > 0) ? app.screenshots[0] : "",
-      img2: (app.screenshots && app.screenshots.length > 1) ? app.screenshots[1] : ""
+      bannerAd: cleanImageUrl(app.headerImage || (app.screenshots && app.screenshots.length > 0 ? app.screenshots[0] : ""))
     }));
 
     res.json(formattedApps);
@@ -68,12 +74,12 @@ app.get('/api/apps', async (req, res) => {
     const formattedApps = results.map(app => ({
       title: app.title || "Sin título",
       developer: app.developer || "Desconocido",
-      icon: app.icon || "",
+      icon: cleanImageUrl(app.icon || ""),
       appId: app.appId || "",
       scoreText: app.scoreText || "4.5",
+      score: app.score || 4.5,
       downloadUrl: getDirectApkUrl(app.appId),
-      img1: (app.screenshots && app.screenshots.length > 0) ? app.screenshots[0] : "",
-      img2: (app.screenshots && app.screenshots.length > 1) ? app.screenshots[1] : ""
+      bannerAd: cleanImageUrl(app.headerImage || (app.screenshots && app.screenshots.length > 0 ? app.screenshots[0] : ""))
     }));
 
     res.json(formattedApps);
@@ -100,12 +106,12 @@ app.get('/api/search', async (req, res) => {
     const formattedApps = results.map(app => ({
       title: app.title || "Sin título",
       developer: app.developer || "Desconocido",
-      icon: app.icon || "",
+      icon: cleanImageUrl(app.icon || ""),
       appId: app.appId || "",
       scoreText: app.scoreText || "4.5",
+      score: app.score || 4.5,
       downloadUrl: getDirectApkUrl(app.appId),
-      img1: (app.screenshots && app.screenshots.length > 0) ? app.screenshots[0] : "",
-      img2: (app.screenshots && app.screenshots.length > 1) ? app.screenshots[1] : ""
+      bannerAd: cleanImageUrl(app.headerImage || (app.screenshots && app.screenshots.length > 0 ? app.screenshots[0] : ""))
     }));
 
     res.json(formattedApps);
@@ -114,7 +120,7 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
-// Endpoint para obtener detalles completos, link de descarga y capturas
+// Endpoint completo para la pantalla de Detalles (Incluye descripción, capturas y comentarios reales)
 app.get('/api/app', async (req, res) => {
   try {
     const appId = req.query.id;
@@ -122,18 +128,38 @@ app.get('/api/app', async (req, res) => {
       return res.status(400).json({ error: "Falta el ID de la aplicación" });
     }
 
-    const appDetails = await gplay.detail({ appId: appId, lang: 'es', country: 'mx' });
+    // Obtenemos los detalles completos de la app y las reseñas de usuarios en paralelo
+    const [appDetails, reviewsData] = await Promise.all([
+      gplay.detail({ appId: appId, lang: 'es', country: 'mx' }),
+      gplay.reviews({ appId: appId, lang: 'es', country: 'mx', num: 10 }).catch(() => [])
+    ]);
+
+    // Formatear las reseñas para que sean fáciles de leer en tu app de Sketchware
+    const formattedReviews = (Array.isArray(reviewsData) ? reviewsData : (reviewsData.data || [])).map(r => ({
+      userName: r.userName || "Usuario",
+      score: r.score || 5,
+      text: r.text || "",
+      date: r.date || ""
+    }));
 
     res.json({
       title: appDetails.title || "Sin título",
       developer: appDetails.developer || "Desconocido",
-      icon: appDetails.icon || "",
+      icon: cleanImageUrl(appDetails.icon || ""),
       summary: appDetails.summary || "",
       description: appDetails.description || "",
       scoreText: appDetails.scoreText || "4.5",
-      installs: appDetails.installs || "Desconocido",
-      size: appDetails.size || "Varía",
-      screenshots: appDetails.screenshots || [],
+      score: appDetails.score || 4.5,
+      installs: appDetails.installs || "Más de 10,000",
+      size: appDetails.size || "Varía según el dispositivo",
+      androidVersion: appDetails.androidVersionText || "Varía",
+      priceText: appDetails.priceText || "Gratis",
+      bannerAd: cleanImageUrl(appDetails.headerImage || ""),
+      // Lista completa de URLs de las capturas de pantalla oficiales
+      screenshots: (appDetails.screenshots || []).map(img => cleanImageUrl(img)),
+      // Comentarios / Reseñas reales de usuarios
+      reviews: formattedReviews,
+      // Enlace directo optimizado para descargar el APK
       downloadUrl: getDirectApkUrl(appId)
     });
   } catch (error) {
