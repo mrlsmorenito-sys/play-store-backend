@@ -1,361 +1,507 @@
+const express = require("express");
+const gplay = require("google-play-scraper");
+
+const app = express();
+
+const PORT = process.env.PORT || 3000;
+
+
+// ==============================
+// CORS
+// ==============================
+
+app.use(function (req, res, next) {
+
+    res.header(
+        "Access-Control-Allow-Origin",
+        "*"
+    );
+
+    res.header(
+        "Access-Control-Allow-Headers",
+        "Origin, X-Requested-With, Content-Type, Accept"
+    );
+
+    next();
+});
+
+
 // ==============================
 // UTILIDADES
 // ==============================
 
 function cleanImageUrl(url) {
-  if (!url) return "";
-  url = String(url).trim();
-  if (url.startsWith("//")) return "https:" + url;
-  return url;
+
+    if (!url) {
+        return "";
+    }
+
+    url = String(url).trim();
+
+    if (url.startsWith("//")) {
+        return "https:" + url;
+    }
+
+    return url;
 }
+
 
 function getDirectApkUrl(appId) {
-  if (!appId) return "";
-  return (
-    "https://d.apkpure.com/b/APK/" +
-    encodeURIComponent(appId) +
-    "?version=latest"
-  );
+
+    if (!appId) {
+        return "";
+    }
+
+    return "https://d.apkpure.com/b/APK/"
+        + encodeURIComponent(appId)
+        + "?version=latest";
 }
+
 
 function formatApp(app) {
-  return {
-    title: app.title || "Sin título",
-    developer: app.developer || "Desconocido",
-    icon: cleanImageUrl(app.icon || ""),
-    appId: app.appId || "",
-    scoreText: app.scoreText || "4.5",
-    score: app.score || 4.5,
-    downloadUrl: getDirectApkUrl(app.appId),
-    bannerAd: cleanImageUrl(
-      app.headerImage ||
-        (app.screenshots && app.screenshots.length > 0
-          ? app.screenshots[0]
-          : "")
-    ),
-  };
-}
 
-// ==============================
-// JSONP HELPER (para extraer datos de Google Play)
-// ==============================
+    return {
 
-async function fetchGooglePlay(url, lang, country) {
-  const res = await fetch(url, {
-    headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-        "(KHTML, like Gecko) Chrome/120.0 Safari/537.36",
-      "Accept-Language": `${lang}-${country},${lang};q=0.9`,
-    },
-  });
-  return await res.text();
-}
+        title:
+            app.title ||
+            "Sin título",
 
-// Extraer apps del HTML de Google Play
-function extractAppsFromHtml(html) {
-  const apps = [];
-  const seen = new Set();
+        developer:
+            app.developer ||
+            "Desconocido",
 
-  // Regex para capturar los bloques de datos AF_initDataCallback
-  const regex =
-    /AF_initDataCallback\(\{key: 'ds:[\d]+',[\s\S]*?data:([\s\S]*?), sideChannel[\s\S]*?\}\)/g;
+        icon:
+            cleanImageUrl(
+                app.icon || ""
+            ),
 
-  let match;
-  while ((match = regex.exec(html)) !== null) {
-    try {
-      const data = JSON.parse(match[1]);
-      walkForApps(data, apps, seen);
-    } catch (e) {
-      // ignorar bloques inválidos
-    }
-  }
+        appId:
+            app.appId || "",
 
-  return apps;
-}
+        scoreText:
+            app.scoreText ||
+            "4.5",
 
-function walkForApps(node, out, seen) {
-  if (!Array.isArray(node)) return;
+        score:
+            app.score ||
+            4.5,
 
-  // Detectar estructura típica de app
-  if (
-    node.length > 3 &&
-    typeof node[0] === "string" &&
-    node[0].length > 5 &&
-    node[0].includes(".") &&
-    Array.isArray(node[1]) &&
-    typeof node[2] === "string" &&
-    node[2].length > 0 &&
-    !seen.has(node[0])
-  ) {
-    const appId = node[0];
-    const icon = node[1]?.[0]?.url || node[1]?.[3]?.url || "";
-    const title = node[2];
-    const developer = node[4] || "Desconocido";
-    const scoreText =
-      node[6]?.[0]?.[0]?.toString() ||
-      node[6]?.[0]?.toString() ||
-      "4.5";
+        downloadUrl:
+            getDirectApkUrl(
+                app.appId
+            ),
 
-    seen.add(appId);
-    out.push({
-      appId,
-      title,
-      developer,
-      icon,
-      scoreText,
-      score: parseFloat(scoreText) || 4.5,
-    });
-  }
-
-  for (const child of node) {
-    if (Array.isArray(child)) walkForApps(child, out, seen);
-  }
-}
-
-// ==============================
-// LISTA DE APPS
-// ==============================
-
-async function getAppList(category, collection, lang, country) {
-  const collectionMap = {
-    TOP_FREE: "topselling_free",
-    NEW_FREE: "topselling_new_free",
-    TOP_PAID: "topselling_paid",
-  };
-
-  const coll = collectionMap[collection] || "topselling_free";
-  const cat = category || "APPLICATION";
-
-  const url =
-    `https://play.google.com/store/apps/collection/${coll}` +
-    `?hl=${lang}&gl=${country}&category=${cat}`;
-
-  const html = await fetchGooglePlay(url, lang, country);
-  return extractAppsFromHtml(html).slice(0, 20);
-}
-
-// ==============================
-// DETALLES DE APP
-// ==============================
-
-function extractAppDetails(html) {
-  const details = { screenshots: [] };
-
-  const titleMatch = html.match(/<meta itemprop="name" content="([^"]+)"/);
-  if (titleMatch) details.title = titleMatch[1];
-
-  const iconMatch = html.match(/<meta itemprop="image" content="([^"]+)"/);
-  if (iconMatch) details.icon = iconMatch[1];
-
-  const descMatch = html.match(
-    /<meta itemprop="description" content="([^"]+)"/
-  );
-  if (descMatch) details.description = descMatch[1];
-
-  const devMatch = html.match(/<meta itemprop="author" content="([^"]+)"/);
-  if (devMatch) details.developer = devMatch[1];
-
-  const scoreMatch = html.match(
-    /<meta itemprop="ratingValue" content="([^"]+)"/
-  );
-  if (scoreMatch) {
-    details.score = parseFloat(scoreMatch[1]);
-    details.scoreText = scoreMatch[1];
-  }
-
-  const installMatch = html.match(
-    /<meta itemprop="interactionCount" content="([^"]+)"/
-  );
-  if (installMatch) details.installs = installMatch[1];
-
-  // Screenshots
-  const shotRegex = /https:\/\/play-lh\.googleusercontent\.com\/[^"\\]+/g;
-  const shots = new Set();
-  let m;
-  while ((m = shotRegex.exec(html)) !== null) {
-    if (m[0].includes("=w") || m[0].includes("=s")) {
-      shots.add(m[0].split("=")[0] + "=w1000");
-    }
-  }
-  details.screenshots = Array.from(shots).slice(0, 10);
-
-  return details;
-}
-
-// ==============================
-// HANDLER PRINCIPAL DEL WORKER
-// ==============================
-
-export default {
-  async fetch(request, env) {
-    const url = new URL(request.url);
-    const path = url.pathname;
-    const lang = env.DEFAULT_LANG || "es";
-    const country = env.DEFAULT_COUNTRY || "mx";
-
-    // CORS headers
-    const corsHeaders = {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers":
-        "Origin, X-Requested-With, Content-Type, Accept",
-      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        bannerAd:
+            cleanImageUrl(
+                app.headerImage ||
+                (
+                    app.screenshots &&
+                    app.screenshots.length > 0
+                        ? app.screenshots[0]
+                        : ""
+                )
+            )
     };
+}
 
-    // Preflight
-    if (request.method === "OPTIONS") {
-      return new Response(null, { status: 204, headers: corsHeaders });
-    }
+
+// ==============================
+// INICIO
+// ==============================
+
+app.get("/", async function (req, res) {
 
     try {
-      // ==============================
-      // RUTA: /
-      // ==============================
-      if (path === "/" || path === "") {
-        const apps = await getAppList(
-          "APPLICATION",
-          "TOP_FREE",
-          lang,
-          country
-        );
-        return jsonResponse(apps.map(formatApp), corsHeaders);
-      }
 
-      // ==============================
-      // RUTA: /api/apps
-      // ==============================
-      if (path === "/api/apps") {
-        const tab = url.searchParams.get("tab") || "apps";
-        let category = "APPLICATION";
-        let collection = "TOP_FREE";
+        const results =
+            await gplay.list({
 
-        if (tab === "games" || tab === "arcade") {
-          category = "GAME";
-        }
-        if (tab === "today") {
-          collection = "NEW_FREE";
-        }
+                category:
+                    gplay.category.APPLICATION,
 
-        const apps = await getAppList(category, collection, lang, country);
-        return jsonResponse(apps.map(formatApp), corsHeaders);
-      }
+                collection:
+                    gplay.collection.TOP_FREE,
 
-      // ==============================
-      // RUTA: /api/search
-      // ==============================
-      if (path === "/api/search") {
-        const query = url.searchParams.get("q");
-        if (!query || query.trim().length === 0) {
-          return jsonResponse([], corsHeaders);
-        }
+                num: 20,
 
-        const searchUrl =
-          `https://play.google.com/store/search?q=${encodeURIComponent(
-            query
-          )}&c=apps&hl=${lang}&gl=${country}`;
+                lang: "es",
 
-        const html = await fetchGooglePlay(searchUrl, lang, country);
-        const apps = extractAppsFromHtml(html).slice(0, 15);
+                country: "mx"
+            });
 
-        return jsonResponse(apps.map(formatApp), corsHeaders);
-      }
 
-      // ==============================
-      // RUTA: /api/app
-      // ==============================
-      if (path === "/api/app") {
-        const appId = url.searchParams.get("id") || url.searchParams.get("appId");
-        if (!appId) {
-          return jsonResponse(
-            { error: "Falta el ID de la aplicación" },
-            corsHeaders,
-            400
-          );
-        }
+        const formattedApps =
+            results.map(formatApp);
 
-        const appUrl =
-          `https://play.google.com/store/apps/details?id=${encodeURIComponent(
-            appId
-          )}&hl=${lang}&gl=${country}`;
 
-        const html = await fetchGooglePlay(appUrl, lang, country);
-        const details = extractAppDetails(html);
+        res.json(formattedApps);
 
-        return jsonResponse(
-          {
-            title: details.title || "Sin título",
-            developer: details.developer || "Desconocido",
-            icon: cleanImageUrl(details.icon || ""),
-            summary: details.summary || "",
-            description: details.description || "",
-            scoreText: details.scoreText || "4.5",
-            score: details.score || 4.5,
-            installs: details.installs || "Más de 10,000",
-            size: details.size || "Varía según el dispositivo",
-            androidVersion: details.androidVersion || "Varía",
-            priceText: details.priceText || "Gratis",
-            bannerAd: cleanImageUrl(details.headerImage || ""),
-            screenshots: (details.screenshots || []).map(cleanImageUrl),
-            reviews: [], // No disponible en Workers
-            downloadUrl: getDirectApkUrl(appId),
-          },
-          corsHeaders
-        );
-      }
-
-      // ==============================
-      // RUTA: /api/download (bonus Evozi)
-      // ==============================
-      if (path === "/api/download") {
-        const appId = url.searchParams.get("id");
-        if (!appId) {
-          return jsonResponse({ error: "Falta id" }, corsHeaders, 400);
-        }
-
-        // Cascada de fuentes
-        const sources = [
-          `https://d.apkpure.com/b/APK/${appId}?version=latest`,
-          `https://apkpure.com/api/v1/download?package_name=${appId}`,
-        ];
-
-        return jsonResponse(
-          {
-            appId,
-            downloadUrl: sources[0],
-            allSources: sources,
-          },
-          corsHeaders
-        );
-      }
-
-      // ==============================
-      // RUTA NO ENCONTRADA
-      // ==============================
-      return jsonResponse(
-        { error: "Ruta no encontrada: " + path },
-        corsHeaders,
-        404
-      );
     } catch (error) {
-      return jsonResponse(
-        { error: "Error interno: " + error.message },
-        corsHeaders,
-        500
-      );
+
+        res.status(500).json({
+
+            status:
+                "Error al obtener aplicaciones",
+
+            error:
+                error.message
+        });
     }
-  },
-};
+});
+
 
 // ==============================
-// HELPER: RESPUESTA JSON CON CORS
+// APPS / GAMES / TODAY
 // ==============================
 
-function jsonResponse(data, corsHeaders, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      "Content-Type": "application/json; charset=utf-8",
-      ...corsHeaders,
-    },
-  });
+app.get(
+    "/api/apps",
+    async function (req, res) {
+
+        try {
+
+            const tab =
+                req.query.tab || "apps";
+
+
+            let category =
+                gplay.category.APPLICATION;
+
+
+            let collection =
+                gplay.collection.TOP_FREE;
+
+
+            if (
+                tab === "games" ||
+                tab === "arcade"
+            ) {
+
+                category =
+                    gplay.category.GAME;
+            }
+
+
+            if (tab === "today") {
+
+                collection =
+                    gplay.collection.NEW_FREE;
+            }
+
+
+            const results =
+                await gplay.list({
+
+                    category:
+                        category,
+
+                    collection:
+                        collection,
+
+                    num: 20,
+
+                    lang: "es",
+
+                    country: "mx"
+                });
+
+
+            const formattedApps =
+                results.map(formatApp);
+
+
+            res.json(formattedApps);
+
+        } catch (error) {
+
+            res.status(500).json({
+
+                error:
+                    "Error al obtener datos: "
+                    + error.message
+            });
         }
+    }
+);
+
+
+// ==============================
+// BUSCAR
+// ==============================
+
+app.get(
+    "/api/search",
+    async function (req, res) {
+
+        try {
+
+            const query =
+                req.query.q;
+
+
+            if (
+                !query ||
+                String(query).trim().length === 0
+            ) {
+
+                return res.json([]);
+            }
+
+
+            const results =
+                await gplay.search({
+
+                    term:
+                        String(query).trim(),
+
+                    num: 15,
+
+                    lang: "es",
+
+                    country: "mx"
+                });
+
+
+            const formattedApps =
+                results.map(formatApp);
+
+
+            res.json(formattedApps);
+
+        } catch (error) {
+
+            res.status(500).json({
+
+                error:
+                    "Error al buscar: "
+                    + error.message
+            });
+        }
+    }
+);
+
+
+// ==============================
+// DETALLES
+// ==============================
+
+app.get(
+    "/api/app",
+    async function (req, res) {
+
+        try {
+
+            const appId =
+                req.query.id;
+
+
+            if (!appId) {
+
+                return res.status(400).json({
+
+                    error:
+                        "Falta el ID de la aplicación"
+                });
+            }
+
+
+            // IMPORTANTE:
+            // google-play-scraper utiliza gplay.app()
+            // para obtener los detalles completos.
+            const details =
+                await gplay.app({
+
+                    appId:
+                        appId,
+
+                    lang:
+                        "es",
+
+                    country:
+                        "mx"
+                });
+
+
+            // ==============================
+            // RESEÑAS
+            // ==============================
+
+            let reviewsData = [];
+
+
+            try {
+
+                reviewsData =
+                    await gplay.reviews({
+
+                        appId:
+                            appId,
+
+                        lang:
+                            "es",
+
+                        country:
+                            "mx",
+
+                        num:
+                            10
+                    });
+
+            } catch (reviewError) {
+
+                console.log(
+                    "No se pudieron obtener las reseñas: "
+                    + reviewError.message
+                );
+
+                reviewsData = [];
+            }
+
+
+            const reviews =
+                Array.isArray(reviewsData)
+                    ? reviewsData
+                    : (
+                        reviewsData &&
+                        Array.isArray(
+                            reviewsData.data
+                        )
+                            ? reviewsData.data
+                            : []
+                    );
+
+
+            const formattedReviews =
+                reviews.map(function (r) {
+
+                    return {
+
+                        userName:
+                            r.userName ||
+                            "Usuario",
+
+                        score:
+                            r.score ||
+                            5,
+
+                        text:
+                            r.text ||
+                            "",
+
+                        date:
+                            r.date ||
+                            ""
+                    };
+                });
+
+
+            // ==============================
+            // RESPUESTA COMPLETA
+            // ==============================
+
+            res.json({
+
+                title:
+                    details.title ||
+                    "Sin título",
+
+                developer:
+                    details.developer ||
+                    "Desconocido",
+
+                icon:
+                    cleanImageUrl(
+                        details.icon ||
+                        ""
+                    ),
+
+                summary:
+                    details.summary ||
+                    "",
+
+                description:
+                    details.description ||
+                    "",
+
+                scoreText:
+                    details.scoreText ||
+                    "4.5",
+
+                score:
+                    details.score ||
+                    4.5,
+
+                installs:
+                    details.installs ||
+                    "Más de 10,000",
+
+                size:
+                    details.size ||
+                    "Varía según el dispositivo",
+
+                androidVersion:
+                    details.androidVersionText ||
+                    "Varía",
+
+                priceText:
+                    details.priceText ||
+                    "Gratis",
+
+                bannerAd:
+                    cleanImageUrl(
+                        details.headerImage ||
+                        ""
+                    ),
+
+                screenshots:
+                    (
+                        details.screenshots ||
+                        []
+                    ).map(function (img) {
+
+                        return cleanImageUrl(
+                            img
+                        );
+                    }),
+
+                reviews:
+                    formattedReviews,
+
+                downloadUrl:
+                    getDirectApkUrl(
+                        appId
+                    )
+            });
+
+        } catch (error) {
+
+            console.error(
+                "Error /api/app:",
+                error
+            );
+
+            res.status(500).json({
+
+                error:
+                    "Error al obtener detalles: "
+                    + error.message
+            });
+        }
+    }
+);
+
+
+// ==============================
+// SERVIDOR
+// ==============================
+
+app.listen(
+    PORT,
+    function () {
+
+        console.log(
+            "Servidor corriendo en el puerto "
+            + PORT
+        );
+    }
+);
