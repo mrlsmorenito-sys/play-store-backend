@@ -62,7 +62,9 @@ function formatApp(app) {
 
     return {
 
-        title: app.title || "Sin título",
+        title:
+            app.title ||
+            "Sin título",
 
         developer:
             app.developer ||
@@ -77,10 +79,12 @@ function formatApp(app) {
             app.appId || "",
 
         scoreText:
-            app.scoreText || "4.5",
+            app.scoreText ||
+            "4.5",
 
         score:
-            app.score || 4.5,
+            app.score ||
+            4.5,
 
         downloadUrl:
             getDirectApkUrl(
@@ -93,9 +97,9 @@ function formatApp(app) {
                 (
                     app.screenshots &&
                     app.screenshots.length > 0
+                        ? app.screenshots[0]
+                        : ""
                 )
-                    ? app.screenshots[0]
-                    : ""
             )
     };
 }
@@ -188,9 +192,11 @@ app.get(
             const results =
                 await gplay.list({
 
-                    category: category,
+                    category:
+                        category,
 
-                    collection: collection,
+                    collection:
+                        collection,
 
                     num: 20,
 
@@ -299,16 +305,26 @@ app.get(
             }
 
 
+            // IMPORTANTE:
+            // google-play-scraper utiliza gplay.app()
+            // para obtener los detalles completos.
             const details =
-                await gplay.detail({
+                await gplay.app({
 
-                    appId: appId,
+                    appId:
+                        appId,
 
-                    lang: "es",
+                    lang:
+                        "es",
 
-                    country: "mx"
+                    country:
+                        "mx"
                 });
 
+
+            // ==============================
+            // RESEÑAS
+            // ==============================
 
             let reviewsData = [];
 
@@ -318,16 +334,25 @@ app.get(
                 reviewsData =
                     await gplay.reviews({
 
-                        appId: appId,
+                        appId:
+                            appId,
 
-                        lang: "es",
+                        lang:
+                            "es",
 
-                        country: "mx",
+                        country:
+                            "mx",
 
-                        num: 10
+                        num:
+                            10
                     });
 
             } catch (reviewError) {
+
+                console.log(
+                    "No se pudieron obtener las reseñas: "
+                    + reviewError.message
+                );
 
                 reviewsData = [];
             }
@@ -338,7 +363,9 @@ app.get(
                     ? reviewsData
                     : (
                         reviewsData &&
-                        Array.isArray(reviewsData.data)
+                        Array.isArray(
+                            reviewsData.data
+                        )
                             ? reviewsData.data
                             : []
                     );
@@ -354,16 +381,23 @@ app.get(
                             "Usuario",
 
                         score:
-                            r.score || 5,
+                            r.score ||
+                            5,
 
                         text:
-                            r.text || "",
+                            r.text ||
+                            "",
 
                         date:
-                            r.date || ""
+                            r.date ||
+                            ""
                     };
                 });
 
+
+            // ==============================
+            // RESPUESTA COMPLETA
+            // ==============================
 
             res.json({
 
@@ -377,14 +411,17 @@ app.get(
 
                 icon:
                     cleanImageUrl(
-                        details.icon || ""
+                        details.icon ||
+                        ""
                     ),
 
                 summary:
-                    details.summary || "",
+                    details.summary ||
+                    "",
 
                 description:
-                    details.description || "",
+                    details.description ||
+                    "",
 
                 scoreText:
                     details.scoreText ||
@@ -412,25 +449,36 @@ app.get(
 
                 bannerAd:
                     cleanImageUrl(
-                        details.headerImage || ""
+                        details.headerImage ||
+                        ""
                     ),
 
                 screenshots:
                     (
-                        details.screenshots || []
+                        details.screenshots ||
+                        []
                     ).map(function (img) {
 
-                        return cleanImageUrl(img);
+                        return cleanImageUrl(
+                            img
+                        );
                     }),
 
                 reviews:
                     formattedReviews,
 
                 downloadUrl:
-                    getDirectApkUrl(appId)
+                    getDirectApkUrl(
+                        appId
+                    )
             });
 
         } catch (error) {
+
+            console.error(
+                "Error /api/app:",
+                error
+            );
 
             res.status(500).json({
 
